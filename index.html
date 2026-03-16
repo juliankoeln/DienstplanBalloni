@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeinDienstplan</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1f2435;
+    --border: #2a3050;
+    --accent: #4f8ef7;
+    --accent2: #f7c94f;
+    --text: #e8eaf2;
+    --muted: #6b7399;
+    --success: #4fd18a;
+    --warn: #f7a04f;
+    --danger: #f74f4f;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(79,142,247,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,142,247,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .screen { display: none; position: relative; z-index: 1; }
+  .screen.active { display: flex; }
+
+  /* ---- LOGIN ---- */
+  #loginScreen {
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 3rem 2.5rem;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 0 80px rgba(79,142,247,0.08);
+    animation: fadeUp 0.6s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .logo {
+    font-family: 'Fraunces', serif;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.3rem;
+  }
+  .logo span { color: var(--accent); }
+  .logo-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 2.5rem;
+  }
+
+  label {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  input[type=text], input[type=password] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.95rem;
+    padding: 0.75rem 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 1.2rem;
+  }
+  input[type=text]:focus, input[type=password]:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+
+  .btn {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-top: 0.5rem;
+  }
+  .btn:hover { background: #3a7be8; }
+  .btn:active { transform: scale(0.98); }
+
+  .error-msg {
+    background: rgba(247,79,79,0.12);
+    border: 1px solid rgba(247,79,79,0.3);
+    border-radius: 8px;
+    color: var(--danger);
+    font-size: 0.8rem;
+    padding: 0.6rem 0.9rem;
+    margin-top: 1rem;
+    display: none;
+  }
+
+  .hint-box {
+    margin-top: 1.5rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+    line-height: 1.8;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+  }
+  .hint-box strong { color: var(--text); }
+
+  /* ---- APP ---- */
+  #appScreen { min-height: 100vh; flex-direction: column; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .header-left { display: flex; align-items: center; gap: 1rem; }
+  .header-logo { font-family: 'Fraunces', serif; font-size: 1.2rem; font-weight: 600; }
+  .header-logo span { color: var(--accent); }
+
+  .header-user { display: flex; align-items: center; gap: 0.8rem; }
+  .avatar {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 500; color: #fff;
+  }
+  .username-label { font-size: 0.82rem; color: var(--muted); }
+
+  .logout-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .logout-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  main {
+    padding: 1.5rem;
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
+    flex: 1;
+  }
+
+  .week-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.4s ease both;
+  }
+  .week-title { font-family: 'Fraunces', serif; font-size: 1.5rem; font-weight: 300; font-style: italic; }
+  .week-title strong { font-style: normal; font-weight: 600; color: var(--accent2); }
+  .kw-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.3rem 0.7rem;
+  }
+
+  /* Stats */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.5s ease 0.1s both;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color: var(--accent); }
+  .stat-num {
+    font-family: 'Fraunces', serif;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+  .stat-lbl { font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+  /* Admin Upload */
+  .admin-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+  }
+  .admin-tab {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: "DM Mono", monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    padding: 0.55rem 0.5rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .admin-tab.active {
+    background: rgba(247,201,79,0.12);
+    border-color: rgba(247,201,79,0.4);
+    color: var(--accent2);
+  }
+  .admin-tab-content { display: none; }
+  .admin-tab-content.active { display: block; }
+
+  /* User list */
+  .user-list {
+    max-height: 280px;
+    overflow-y: auto;
+    margin-bottom: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .user-row {
+    display: flex;
+    align-items: center;
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+    gap: 0.7rem;
+    transition: background 0.15s;
+  }
+  .user-row:last-child { border-bottom: none; }
+  .user-row:hover { background: var(--surface2); }
+  .user-kuerzel {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(79,142,247,0.1);
+    border-radius: 4px;
+    padding: 0.15rem 0.45rem;
+    min-width: 52px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .user-kuerzel.is-admin { color: var(--accent2); background: rgba(247,201,79,0.1); }
+  .user-name { flex: 1; font-size: 0.85rem; color: var(--text); }
+  .user-aliases { font-size: 0.7rem; color: var(--muted); }
+  .user-delete {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.4rem;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .user-delete:hover { border-color: var(--danger); color: var(--danger); }
+  .user-delete:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Add user form */
+  .add-user-form {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .add-user-form input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: "DM Mono", monospace;
+    font-size: 0.82rem;
+    padding: 0.55rem 0.75rem;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 0;
+    width: 100%;
+  }
+  .add-user-form input:focus { border-color: var(--accent); }
+  .add-user-form input::placeholder { color: var(--muted); font-size: 0.75rem; }
+  .add-user-btn {
+    grid-column: 1 / -1;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: "DM Mono", monospace;
+    font-size: 0.82rem;
+    padding: 0.6rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .add-user-btn:hover { background: #3a7be8; }
+  .form-hint {
+    grid-column: 1 / -1;
+    font-size: 0.7rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .admin-msg {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    margin-top: 0.5rem;
+    display: none;
+  }
+  .admin-msg.ok   { background: rgba(79,209,138,0.1); color: var(--success); border: 1px solid rgba(79,209,138,0.2); }
+  .admin-msg.err  { background: rgba(247,79,79,0.1);  color: var(--danger);  border: 1px solid rgba(247,79,79,0.2); }
+
+  /* Plan list in admin */
+  .plan-list { margin-bottom: 0.8rem; }
+  .plan-item {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.5rem;
+    transition: border-color 0.2s;
+  }
+  .plan-item.active-plan { border-color: rgba(79,209,138,0.4); }
+  .plan-item.expired-plan { opacity: 0.45; }
+  .plan-item.future-plan { border-color: rgba(79,142,247,0.3); }
+  .plan-kw {
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+  .plan-kw.kw-active  { background: rgba(79,209,138,0.12); color: var(--success); border: 1px solid rgba(79,209,138,0.25); }
+  .plan-kw.kw-future  { background: rgba(79,142,247,0.12);  color: var(--accent);  border: 1px solid rgba(79,142,247,0.25); }
+  .plan-kw.kw-expired { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .plan-info { flex: 1; min-width: 0; }
+  .plan-filename { font-size: 0.82rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plan-dates { font-size: 0.7rem; color: var(--muted); margin-top: 0.1rem; }
+  .plan-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .plan-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--muted);
+    font-family: "DM Mono", monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .plan-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .plan-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+  .plan-btn.pinned { border-color: rgba(247,201,79,0.5); color: var(--accent2); }
+
+  /* Colleague selector in main view */
+  .plan-switcher {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    animation: fadeUp 0.4s ease both;
+  }
+  .plan-switch-btn {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: "DM Mono", monospace;
+    font-size: 0.75rem;
+    padding: 0.6rem 0.5rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    line-height: 1.4;
+  }
+  .plan-switch-btn.active {
+    background: rgba(79,142,247,0.1);
+    border-color: rgba(79,142,247,0.4);
+    color: var(--accent);
+  }
+  .admin-badge {
+    background: rgba(247,201,79,0.15);
+    border: 1px solid rgba(247,201,79,0.3);
+    border-radius: 4px;
+    color: var(--accent2);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    padding: 0.15rem 0.5rem;
+    text-transform: uppercase;
+  }
+  .admin-panel {
+    background: var(--surface);
+    border: 1px solid rgba(247,201,79,0.25);
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.4s ease both;
+  }
+  .admin-panel-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 1rem;
+  }
+  .admin-upload-zone {
+    border: 2px dashed rgba(247,201,79,0.3);
+    border-radius: 10px;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .admin-upload-zone:hover, .admin-upload-zone.drag {
+    border-color: var(--accent2);
+    background: rgba(247,201,79,0.05);
+  }
+  .admin-upload-zone p { font-size: 0.82rem; color: var(--muted); line-height: 1.8; }
+  .admin-upload-zone p strong { color: var(--accent2); }
+  .admin-upload-zone .upload-icon { font-size: 1.8rem; margin-bottom: 0.4rem; }
+  .current-plan-info {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .current-plan-info strong { color: var(--text); }
+  .plan-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-active  { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .dot-none    { background: var(--muted); }
+
+  /* Preview */
+  .preview-section {
+    margin-top: 2rem;
+    animation: fadeUp 0.5s ease 0.3s both;
+  }
+  .preview-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .preview-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .preview-week {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 0.6rem;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .preview-week:hover { border-color: var(--accent); }
+  .preview-week-header {
+    padding: 0.7rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .preview-week-kw {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(79,142,247,0.1);
+    border: 1px solid rgba(79,142,247,0.2);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    flex-shrink: 0;
+  }
+  .preview-week-label { font-size: 0.85rem; color: var(--text); flex: 1; }
+  .preview-week-chevron { color: var(--muted); font-size: 0.7rem; transition: transform 0.2s; }
+  .preview-week.open .preview-week-chevron { transform: rotate(90deg); }
+  .preview-days { display: none; border-top: 1px solid var(--border); padding: 0.6rem 1rem; }
+  .preview-week.open .preview-days { display: block; }
+  .preview-day {
+    display: flex;
+    gap: 0.8rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.8rem;
+  }
+  .preview-day:last-child { border-bottom: none; }
+  .preview-day-name { color: var(--muted); width: 28px; flex-shrink: 0; }
+  .preview-day-date { color: var(--muted); width: 60px; flex-shrink: 0; }
+  .preview-day-items { color: var(--text); flex: 1; line-height: 1.7; }
+
+  /* Search */
+  .search-bar {
+    margin-bottom: 1rem;
+    animation: fadeUp 0.4s ease both;
+  }
+  .search-inner {
+    display: flex;
+    align-items: center;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.7rem 1rem;
+    gap: 0.6rem;
+    transition: border-color 0.2s;
+  }
+  .search-inner:focus-within { border-color: var(--accent); }
+  .search-icon { font-size: 0.9rem; flex-shrink: 0; }
+  .search-inner input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: "DM Mono", monospace;
+    font-size: 0.88rem;
+    margin-bottom: 0;
+    padding: 0;
+  }
+  .search-inner input::placeholder { color: var(--muted); }
+  .search-clear {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
+    line-height: 1;
+  }
+  .search-clear:hover { color: var(--text); }
+  #searchResults { margin-bottom: 1.5rem; }
+  .search-result-day { margin-bottom: 1rem; }
+  .search-hit {
+    background: var(--surface);
+    border: 1px solid rgba(79,142,247,0.3);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.4rem;
+    animation: fadeUp 0.25s ease both;
+  }
+  .search-hit-name {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.2rem;
+  }
+  .search-hit-time { font-size: 1rem; font-weight: 500; color: var(--accent2); }
+  .search-hit-task { font-size: 0.88rem; color: var(--text); margin-top: 0.2rem; }
+  .search-hit-note { font-size: 0.73rem; color: var(--muted); margin-top: 0.2rem; line-height: 1.6; }
+  .search-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  /* Upload */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.5s ease 0.15s both;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(79,142,247,0.05); }
+  .upload-zone .upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .upload-zone p { font-size: 0.82rem; color: var(--muted); line-height: 1.8; }
+  .upload-zone p strong { color: var(--accent); }
+  #fileInput { display: none; }
+
+  /* Processing */
+  .processing {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 1rem;
+    background: rgba(79,142,247,0.08);
+    border: 1px solid rgba(79,142,247,0.2);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    font-size: 0.82rem;
+    color: var(--accent);
+    display: none;
+  }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(79,142,247,0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* Success banner */
+  .success-banner {
+    background: rgba(79,209,138,0.08);
+    border: 1px solid rgba(79,209,138,0.25);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-size: 0.8rem;
+    color: var(--success);
+    margin-bottom: 1.5rem;
+    display: none;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  /* Raw text debug */
+  .debug-toggle {
+    font-size: 0.72rem;
+    color: var(--muted);
+    cursor: pointer;
+    text-decoration: underline;
+    margin-bottom: 0.5rem;
+    display: none;
+  }
+  .debug-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    font-size: 0.7rem;
+    color: var(--muted);
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 1.5rem;
+    display: none;
+    line-height: 1.6;
+  }
+
+  /* Shifts */
+  .shifts-container { animation: fadeUp 0.5s ease 0.2s both; }
+
+  .day-block { margin-bottom: 1.2rem; }
+  .day-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+    padding-left: 0.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .day-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .shift-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    transition: border-color 0.2s, transform 0.15s;
+    margin-bottom: 0.5rem;
+  }
+  .shift-card:hover { border-color: var(--accent); transform: translateX(3px); }
+  .shift-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .shift-time {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--accent2);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .shift-info { width: 100%; }
+  .shift-task { font-size: 0.9rem; color: var(--text); margin-bottom: 0.3rem; word-break: break-word; }
+  .shift-note { font-size: 0.75rem; color: var(--muted); line-height: 1.7; word-break: break-word; }
+
+  .shift-tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    align-self: flex-start;
+    margin-top: 2px;
+  }
+  .tag-work     { background: rgba(79,209,138,0.12); color: var(--success); border: 1px solid rgba(79,209,138,0.2); }
+  .tag-vacation { background: rgba(247,201,79,0.12); color: var(--accent2); border: 1px solid rgba(247,201,79,0.2); }
+  .tag-sick     { background: rgba(247,79,79,0.12);  color: var(--danger);  border: 1px solid rgba(247,79,79,0.2); }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 2;
+  }
+  .empty-state .big { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+  /* no match */
+  .no-match {
+    background: rgba(247,160,79,0.08);
+    border: 1px solid rgba(247,160,79,0.25);
+    border-radius: 10px;
+    padding: 1.2rem;
+    color: var(--warn);
+    font-size: 0.82rem;
+    line-height: 1.8;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- ========= LOGIN ========= -->
+<div id="loginScreen" class="screen active">
+  <div class="login-card">
+    <div class="logo">Mein<span>Dienst</span></div>
+    <div class="logo-sub">Persönlicher Schichtplaner</div>
+
+    <label>Kürzel / Name</label>
+    <input type="text" id="loginUser" placeholder="z.B. VAL oder Valeri" autocomplete="off" spellcheck="false">
+
+    <label>Passwort</label>
+    <input type="password" id="loginPass" placeholder="••••••••">
+
+    <button class="btn" onclick="doLogin()">Anmelden →</button>
+    <div class="error-msg" id="loginError">Kürzel oder Passwort ungültig.</div>
+
+    <div class="hint-box">
+      Zugänge: Kürzel = Name (z.B. <strong>VAL</strong>), Passwort = Kürzel + 123<br>
+      z.B. <strong>VAL</strong> / val123 &nbsp;·&nbsp; <strong>JAKOB</strong> / jak123 &nbsp;·&nbsp; <strong>RALF</strong> / ral123<br>
+      <strong>ANDREJ</strong> / and123 &nbsp;·&nbsp; <strong>AXEL</strong> / axe123 &nbsp;·&nbsp; <strong>FELI</strong> / fel123<br>
+      <strong>SENAD</strong> / sen123 &nbsp;·&nbsp; <strong>SIMON</strong> / sim123 &nbsp;·&nbsp; <strong>SANELA</strong> / san123
+    </div>
+  </div>
+</div>
+
+<!-- ========= APP ========= -->
+<div id="appScreen" class="screen">
+  <header>
+    <div class="header-left">
+      <div class="header-logo">Mein<span>Dienst</span></div>
+    </div>
+    <div class="header-user">
+      <div class="avatar" id="headerAvatar">--</div>
+      <span class="username-label" id="headerName">--</span>
+      <button class="logout-btn" onclick="doLogout()">Abmelden</button>
+    </div>
+  </header>
+
+  <!-- Admin Panel (only visible for admin) -->
+  <div id="adminPanel" style="display:none">
+    <div style="max-width:760px; margin:0 auto; padding:1.5rem 1.5rem 0">
+      <div class="admin-panel">
+        <div class="admin-panel-title">⚙️ Admin-Bereich</div>
+
+        <!-- Tabs -->
+        <div class="admin-tabs">
+          <div class="admin-tab active" onclick="switchAdminTab('upload', this)">📤 Plan hochladen</div>
+          <div class="admin-tab" onclick="switchAdminTab('users', this)">👥 Personal verwalten</div>
+          <div class="admin-tab" onclick="switchAdminTab('plans', this)">📋 Pläne verwalten</div>
+        </div>
+
+        <!-- Tab: Plan hochladen -->
+        <div class="admin-tab-content active" id="adminTab-upload">
+          <div class="admin-upload-zone" id="adminUploadZone"
+               onclick="document.getElementById('adminFileInput').click()">
+            <div class="upload-icon">📤</div>
+            <p><strong>Neuen Dienstplan hochladen</strong></p>
+            <p>PDF hier ablegen oder klicken<br>
+            Der Plan wird für alle Kollegen sofort sichtbar.</p>
+          </div>
+          <input type="file" id="adminFileInput" accept=".pdf" style="display:none"
+                 onchange="adminUploadPdf(this)">
+          <div class="current-plan-info" id="currentPlanInfo">
+            <div class="plan-status-dot dot-none" id="planStatusDot"></div>
+            <span id="currentPlanLabel">Kein Plan hochgeladen</span>
+          </div>
+        </div>
+
+        <!-- Tab: Personal verwalten -->
+        <div class="admin-tab-content" id="adminTab-users">
+          <div class="user-list" id="userList"></div>
+
+          <div class="add-user-form">
+            <input type="text" id="newUserName"    placeholder="Vollständiger Name  (z.B. Sandra)">
+            <input type="text" id="newUserKuerzel" placeholder="Kürzel  (z.B. SAN)" style="text-transform:uppercase">
+            <input type="password" id="newUserPass" placeholder="Passwort wählen">
+            <input type="text" id="newUserAlias"   placeholder="Weitere Namen im Plan (optional)">
+            <div class="form-hint">
+              Kürzel = Login-Name des Kollegen (Großbuchstaben).<br>
+              Weitere Namen: falls im Plan ein Spitzname steht, kommagetrennt eintragen.
+            </div>
+            <button class="add-user-btn" onclick="addUser()">✚ Mitarbeiter hinzufügen</button>
+          </div>
+          <div class="admin-msg" id="userMsg"></div>
+        </div>
+
+        <!-- Tab: Pläne verwalten -->
+        <div class="admin-tab-content" id="adminTab-plans">
+          <div class="plan-list" id="adminPlanList">
+            <div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">Lade Pläne…</div>
+          </div>
+          <div class="admin-msg" id="planMsg"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <!-- Plan switcher (shown when 2 plans available) -->
+    <div class="plan-switcher" id="planSwitcher" style="display:none"></div>
+
+    <div class="week-header">
+      <div class="week-title">Deine <strong>Schichten</strong></div>
+      <div class="kw-badge" id="weekBadge">– Plan ausstehend –</div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-num" id="statShifts">–</div>
+        <div class="stat-lbl">Schichten</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statDays">–</div>
+        <div class="stat-lbl">Tage</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="statEarly">–</div>
+        <div class="stat-lbl">Frühdienste</div>
+      </div>
+    </div>
+
+    <!-- Upload -->
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📄</div>
+      <p><strong>PDF-Dienstplan hochladen</strong></p>
+      <p>Klicken oder Datei hierher ziehen<br>Der Plan wird automatisch nach deinen Schichten durchsucht.</p>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf" onchange="handleFile(this)">
+
+    <!-- Search bar -->
+    <div class="search-bar" id="searchBar" style="display:none">
+      <div class="search-inner">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Kollege suchen… z.B. Ralf" oninput="doSearch(this.value)" autocomplete="off" spellcheck="false">
+        <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none">✕</button>
+      </div>
+    </div>
+    <div id="searchResults" style="display:none"></div>
+
+    <!-- Processing indicator -->
+    <div class="processing" id="processingBox">
+      <div class="spinner"></div>
+      <span id="processingText">Lese PDF aus…</span>
+    </div>
+
+    <!-- Success -->
+    <div class="success-banner" id="successBanner"></div>
+
+    <!-- No match warning -->
+    <div class="no-match" id="noMatchBox"></div>
+
+    <!-- Debug raw text -->
+    <div class="debug-toggle" id="debugToggle" onclick="toggleDebug()">▸ Rohtext anzeigen (Debug)</div>
+    <div class="debug-box" id="debugBox"></div>
+
+    <!-- Shifts -->
+    <div class="shifts-container" id="shiftsContainer"></div>
+    <!-- Preview -->
+    <div class="preview-section" id="previewSection" style="display:none">
+      <div class="preview-title">📅 Vorschau nächste Wochen</div>
+      <div id="previewContent"></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// =============================================
+// API CONFIG
+// =============================================
+const API_URL = 'https://dienstplanballoni.gossmann.workers.dev';
+
+// =============================================
+// USER DATABASE
+// =============================================
+const USERS = {
+  'VAL':       { pass: 'val123',  name: 'Valeri',       aliases: ['valeri'] },
+  'JAKOB':     { pass: 'jak123',  name: 'Jakob',        aliases: ['jakob'] },
+  'RALF':      { pass: 'ral123',  name: 'Ralf',         aliases: ['ralf'] },
+  'ANDREJ':    { pass: 'and123',  name: 'Andrej',       aliases: ['andrej'] },
+  'AXEL':      { pass: 'axe123',  name: 'Axel',         aliases: ['axel'] },
+  'SUAD':      { pass: 'sua123',  name: 'Suad',         aliases: ['suad'] },
+  'DAWID':     { pass: 'daw123',  name: 'Dawid',        aliases: ['dawid'] },
+  'BERND':     { pass: 'ber123',  name: 'Bernd',        aliases: ['bernd'] },
+  'MARVIN':    { pass: 'mar123',  name: 'Marvin',       aliases: ['marvin'] },
+  'OMER':      { pass: 'ome123',  name: 'Omer',         aliases: ['omer'] },
+  'LEO':       { pass: 'leo123',  name: 'Leo',          aliases: ['leo'] },
+  'OLEG':      { pass: 'ole123',  name: 'Oleg',         aliases: ['oleg'] },
+  'SENAD':     { pass: 'sen123',  name: 'Senad',        aliases: ['senad'] },
+  'NIKLAS':    { pass: 'nik123',  name: 'Niklas',       aliases: ['niklas'] },
+  'ROSI':      { pass: 'ros123',  name: 'Rosi',         aliases: ['rosi'] },
+  'MICHAELA':  { pass: 'mic123',  name: 'Michaela',     aliases: ['michaela'] },
+  'ANNIKA':    { pass: 'ann123',  name: 'Annika',       aliases: ['annika'] },
+  'MATEO':     { pass: 'mat123',  name: 'Mateo',        aliases: ['mateo'] },
+  'VALENTYNA': { pass: 'vln123',  name: 'Valentyna',    aliases: ['valentyna'] },
+  'WILLI':     { pass: 'wil123',  name: 'Willi M.',     aliases: ['willi m.', 'willi'] },
+  'MOHAMED':   { pass: 'moh123',  name: 'Mohamed',      aliases: ['mohamed'] },
+  'ASIM':      { pass: 'asi123',  name: 'Asim',         aliases: ['asim'] },
+  'YOSYP':     { pass: 'yos123',  name: 'Yosyp',       aliases: ['yosyp'] },
+  'SIMON':     { pass: 'sim123',  name: 'Simon',        aliases: ['simon'] },
+  'FELI':      { pass: 'fel123',  name: 'Feli',         aliases: ['feli'] },
+  'NAVIN':     { pass: 'nav123',  name: 'Navin',        aliases: ['navin'] },
+  'JUTTA':     { pass: 'jut123',  name: 'Jutta',        aliases: ['jutta'] },
+  'SANELA':    { pass: 'san123',  name: 'Sanela',       aliases: ['sanela'] },
+  'LES':       { pass: 'les123',  name: 'Les',          aliases: ['les'] },
+  'ALESSANDRO':{ pass: 'ale123',  name: 'Alessandro',   aliases: ['alessandro'] },
+  'JOSHUA':    { pass: 'jos123',  name: 'Joshua',       aliases: ['joshua'] },
+  'PHILIPP':   { pass: 'phi123',  name: 'Philipp',      aliases: ['philipp'] },
+  'INGO':      { pass: 'ing123',  name: 'Ingo',         aliases: ['ingo'] },
+  'JENNIFER':  { pass: 'jen123',  name: 'Jennifer',     aliases: ['jennifer'] },
+  'THERESA':   { pass: 'the123',  name: 'Theresa',      aliases: ['theresa'] },
+  'ULRIKE':    { pass: 'ulr123',  name: 'Ulrike M.',    aliases: ['ulrike m.', 'ulrike'] },
+  'MATZE':     { pass: 'mtz123',  name: 'Matze',        aliases: ['matze'] },
+  // ── Admin-Account (Personaler) ──
+  'ADMIN':     { pass: 'admin2026', name: 'Admin',        aliases: ['admin'], isAdmin: true },
+  'HARTUNG':   { pass: 'har123',  name: 'Frau Hartung', aliases: ['frau hartung', 'hartung'] },
+  'ARNES':     { pass: 'arn123',  name: 'Arnes',        aliases: ['arnes'] },
+  'DANIEL':    { pass: 'dan123',  name: 'Daniel',       aliases: ['daniel'] },
+  'OSMAN':     { pass: 'osm123',  name: 'Osman',        aliases: ['osman'] },
+  'CARL':      { pass: 'car123',  name: 'Carl',         aliases: ['carl'] },
+  'GUNNAR':    { pass: 'gun123',  name: 'Gunnar',       aliases: ['gunnar'] },
+  'VICKY':     { pass: 'vic123',  name: 'Vicky',        aliases: ['vicky'] },
+  'REBECCA':   { pass: 'reb123',  name: 'Rebecca',      aliases: ['rebecca'] },
+  'OLEKSANDR': { pass: 'ole456',  name: 'Oleksandr',    aliases: ['oleksandr'] },
+  'MICHELA':   { pass: 'mch123',  name: 'Michela',      aliases: ['michela'] },
+};
+
+// Configure pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let currentUser = null;
+let rawPdfText = '';
+
+// =============================================
+// LOGIN
+// =============================================
+function doLogin() {
+  const raw = document.getElementById('loginUser').value.trim();
+  const p   = document.getElementById('loginPass').value.trim();
+  const key = raw.toUpperCase();
+  const err = document.getElementById('loginError');
+
+  // Find by exact key or by alias
+  let found = null;
+  if (USERS[key] && USERS[key].pass === p) {
+    found = key;
+  } else {
+    // search aliases
+    for (const [k, u] of Object.entries(USERS)) {
+      if (u.aliases.some(a => a === raw.toLowerCase()) && u.pass === p) {
+        found = k; break;
+      }
+    }
+  }
+
+  if (found) {
+    err.style.display = 'none';
+    currentUser = found;
+    enterApp();
+  } else {
+    err.style.display = 'block';
+    document.getElementById('loginPass').value = '';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('loginScreen').classList.contains('active')) doLogin();
+  }
+});
+
+function enterApp() {
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('appScreen').classList.add('active');
+  const user = USERS[currentUser];
+  document.getElementById('headerAvatar').textContent = currentUser.slice(0, 2);
+
+  // Show admin badge if admin
+  const nameEl = document.getElementById('headerName');
+  if (user.isAdmin) {
+    nameEl.innerHTML = `${user.name} <span class="admin-badge">Admin</span>`;
+    document.getElementById('adminPanel').style.display = 'block';
+    loadCurrentPlanInfo();
+  } else {
+    nameEl.textContent = user.name;
+    document.getElementById('adminPanel').style.display = 'none';
+  }
+
+  document.getElementById('shiftsContainer').innerHTML = `
+    <div class="empty-state">
+      <div class="big">⏳</div>
+      Lade aktuellen Plan…
+    </div>`;
+
+  // Try to load the latest plan from Supabase automatically
+  autoLoadLatestPlan();
+}
+
+async function autoLoadLatestPlan() {
+  const user = getRuntimeUsers()[currentUser] || USERS[currentUser];
+
+  try {
+    if (API_URL === 'DEINE_API_URL') throw new Error('not_configured');
+
+    // Load the next 2 relevant plans
+    const plans = await loadPlansFromAPI();
+
+    if (!plans.length) throw new Error('no_plan');
+
+    // Show plan switcher if 2 plans available
+    renderPlanSwitcher(plans);
+
+    // Update admin plan info
+    if (user.isAdmin) {
+      const latest = plans[0];
+      document.getElementById('planStatusDot').className = 'plan-status-dot dot-active';
+      document.getElementById('currentPlanLabel').innerHTML =
+        `${plans.length} Plan${plans.length > 1 ? 'e' : ''} verfügbar · zuletzt: <strong>${latest.original_name}</strong>`;
+    }
+
+    // Load the first (current/soonest) plan
+    document.getElementById('shiftsContainer').innerHTML =
+      `<div class="empty-state"><div class="big">📄</div>Lade Plan…</div>`;
+
+    const pdfResp = await fetch(`${API_URL}/download/${plans[0].id}?t=${Date.now()}`);
+    if (!pdfResp.ok) throw new Error('download_failed');
+    const blob = await pdfResp.blob();
+    await processPdfFile(blob, plans[0].original_name);
+
+  } catch(e) {
+    const notConfigured = e.message === 'not_configured';
+    document.getElementById('shiftsContainer').innerHTML = `
+      <div class="empty-state">
+        <div class="big">👋</div>
+        Hallo ${user.name}!<br>
+        ${user.isAdmin
+          ? notConfigured
+            ? '<span style="color:var(--warn);font-size:0.8rem">⚙️ API_URL noch nicht eingetragen.</span>'
+            : 'Lade unten den aktuellen Plan hoch.'
+          : 'Noch kein Plan verfügbar – der Admin lädt ihn gleich hoch.'}
+      </div>`;
+    if (!user.isAdmin) {
+      document.getElementById('uploadZone').style.display = 'block';
+    }
+  }
+}
+
+async function loadCurrentPlanInfo() {
+  if (API_URL === 'DEINE_API_URL') return;
+  try {
+    const resp = await fetch(`${API_URL}/latest`);
+    if (!resp.ok) return;
+    const meta = await resp.json();
+    document.getElementById('planStatusDot').className = 'plan-status-dot dot-active';
+    document.getElementById('currentPlanLabel').innerHTML =
+      `Aktueller Plan: <strong>${meta.original_name}</strong> · ${meta.uploaded_at.slice(0,10)}`;
+  } catch(e) { /* noch kein Plan */ }
+}
+
+async function adminUploadPdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const zone = document.getElementById('adminUploadZone');
+  zone.innerHTML = `<div class="upload-icon">⏳</div><p><strong>${file.name}</strong><br>Wird hochgeladen…</p>`;
+
+  try {
+    if (API_URL === 'DEINE_API_URL') throw new Error('API_URL nicht eingetragen!');
+
+    // Send PDF to our backend API
+    // First read the PDF text to extract date range
+    let startDate = null, endDate = null, startStr = '', endStr = '';
+    try {
+      const ab  = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+      let text  = '';
+      for (let i = 1; i <= Math.min(pdf.numPages, 2); i++) {
+        const pg = await pdf.getPage(i);
+        const ct = await pg.getTextContent();
+        text += ct.items.map(it => it.str).join(' ');
+      }
+      const dr = extractPlanDateRange(text);
+      if (dr) {
+        startDate = dr.start.toISOString();
+        endDate   = dr.end.toISOString();
+        startStr  = dr.startStr;
+        endStr    = dr.endStr;
+      }
+    } catch(e) { /* date extraction failed, upload anyway */ }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('original_name', file.name);
+    if (startDate) formData.append('start_date', startDate);
+    if (endDate)   formData.append('end_date',   endDate);
+    if (startStr)  formData.append('start_str',  startStr);
+    if (endStr)    formData.append('end_str',     endStr);
+
+    const resp = await fetch(`${API_URL}/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(err || 'Upload fehlgeschlagen');
+    }
+
+    zone.innerHTML = `
+      <div class="upload-icon">✅</div>
+      <p><strong>${file.name}</strong> hochgeladen!</p>
+      <p style="font-size:0.72rem;color:var(--success)">
+        Alle Kollegen sehen jetzt diesen Plan beim Login.
+      </p>`;
+
+    document.getElementById('planStatusDot').className = 'plan-status-dot dot-active';
+    document.getElementById('currentPlanLabel').innerHTML =
+      `Aktueller Plan: <strong>${file.name}</strong> · gerade hochgeladen`;
+
+    // Process for admin view too
+    await processPdfFile(file, file.name);
+
+  } catch(e) {
+    zone.innerHTML = `
+      <div class="upload-icon">⚠️</div>
+      <p style="color:var(--danger)">${e.message}</p>
+      <p style="font-size:0.72rem">Bitte API_URL in der index.html prüfen.</p>`;
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// =============================================
+// PARSE ALL SHIFTS (for global colleague search)
+// =============================================
+function parseAllShifts(text) {
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // Merge continuation lines (same logic as parseShiftsForUser)
+  const lines = [];
+  for (const line of rawLines) {
+    const isCont = lines.length > 0 &&
+      /^[A-ZÄÖÜ][a-zäöü]/.test(line) &&
+      !/^(DEKORATION|VORBEREITUNGEN|VERANSTALTUNGEN|AUFBAU|ABBAU|TRANSPORT|URLAUB|KRANK|ÜBERSTUNDENFREI|Happy|HAPPY)/i.test(line) &&
+      !DAY_RE.test(line) &&
+      !/^\d/.test(line) &&
+      !/^K-(?:BA|CX)/i.test(line);
+    if (isCont) {
+      lines[lines.length - 1] = (lines[lines.length - 1].replace(/,\s*$/, '') + ', ' + line).replace(/,\s*,/g, ',');
+    } else {
+      lines.push(line);
+    }
+  }
+
+  const allShifts = [];
+  let curDay = null, curBlock = [], curBlockStart = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const dm = lines[i].match(DAY_RE);
+    if (dm) {
+      if (curDay && curBlock.length)
+        allShifts.push(...extractAllFromBlock(curBlock, curDay));
+      curDay = `${dm[1]}, ${dm[2]}`;
+      curBlock = [];
+    } else if (curDay) {
+      curBlock.push(lines[i]);
+    }
+  }
+  if (curDay && curBlock.length)
+    allShifts.push(...extractAllFromBlock(curBlock, curDay));
+
+  return allShifts;
+}
+
+// Extract every name-line from a day block (regardless of who is logged in)
+function extractAllFromBlock(lines, dayLabel) {
+  const shifts = [];
+  const allAliases = Object.values(USERS).flatMap(u => u.aliases);
+
+  // A "name line" is one that contains at least one known person name
+  // OR looks like a list of capitalized names after a time code
+  const nameLineRe = /^(?:(?:früh|nachmittags|dort|unterwegs|ca\.?\s*\d|[\d.]+)\s+)?([A-ZÄÖÜ][a-zäöü].{2,})$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Skip headers, plates, numbered items that contain no names
+    if (/^(DEKORATION|VORBEREITUNGEN|VERANSTALTUNGEN|AUFBAU|ABBAU|TRANSPORT|URLAUB|KRANK|ÜBERSTUNDENFREI)/i.test(line)) continue;
+    if (/^K-(?:BA|CX)/i.test(line)) continue;
+    if (/^\d+\)\s*\S/.test(line) && !/[A-ZÄÖÜ][a-zäöü].*,/.test(line)) continue;
+
+    // Check if at least one known name appears on the line
+    const hasName = allAliases.some(a =>
+      new RegExp('(?:^|[,\\s])' + escapeRegex(a) + '(?:[,\\s.]|$)', 'i').test(line)
+    );
+    if (!hasName) continue;
+
+    // Extract time from the line itself
+    const stripped = line.replace(PLATE_RE, '').trim();
+    const tm = stripped.match(TIME_RE);
+    let timeStr = '–', locStr = '';
+    if (tm) {
+      timeStr = formatTime(tm[1].trim());
+      locStr  = resolveLocation((tm[2] || '').trim());
+    } else {
+      // scan back for time
+      for (let j = i - 1; j >= 0 && j >= i - 6; j--) {
+        const prev = lines[j];
+        if (/^\d+\)\s*\S/.test(prev)) break;
+        if (/^K-(?:BA|CX)/i.test(prev) && !/^\d/.test(prev)) continue;
+        const s2 = prev.replace(PLATE_RE, '').trim();
+        const tm2 = s2.match(TIME_RE);
+        if (tm2) {
+          timeStr = formatTime(tm2[1].trim());
+          locStr  = resolveLocation((tm2[2] || '').trim());
+          break;
+        }
+      }
+    }
+
+    // Get task
+    let task = '';
+    for (let j = i - 1; j >= 0 && j >= i - 12; j--) {
+      const prev = lines[j];
+      if (/^(DEKORATION|VORBEREITUNGEN|VERANSTALTUNGEN|AUFBAU|ABBAU|TRANSPORT)\s*:/i.test(prev)) {
+        task = toTitleCase(prev.replace(/\s*:.*$/, '').trim()); break;
+      }
+      const nm = prev.match(/^\d+\)\s*(.+)$/);
+      if (nm) { task = nm[1].replace(PLATE_RE, '').trim(); break; }
+    }
+
+    // Get plates
+    const plateLines = lines.slice(Math.max(0, i-1), i+2);
+    const plates = [...new Set(plateLines.flatMap(l => [...(l.matchAll(PLATE_RE) || [])].map(m => m[0])))];
+
+    // Extract all names from the line
+    const rawNames = line.replace(PLATE_RE, '').replace(TIME_RE, '').replace(/\(.*?\)/g, '').trim();
+    const colleagues = rawNames.split(/,\s*/).map(p => p.trim()).filter(p =>
+      p.length >= 2 && /^[A-ZÄÖÜ]/.test(p)
+    );
+
+    const timeDisplay = locStr ? `${timeStr} · ${locStr}` : timeStr;
+
+    shifts.push({
+      day: dayLabel,
+      time: timeDisplay,
+      task: task || 'Dienst',
+      rawNames,
+      colleagues,
+      plates,
+      note: '',
+      tag: 'work'
+    });
+  }
+  return shifts;
+}
+
+// =============================================
+// PLAN MANAGEMENT  –  multi-plan with date detection
+// =============================================
+
+let loadedPlans = [];       // all plans from API: [{id, original_name, start_date, end_date, pinned, uploaded_at}]
+let activePlanIndex = 0;    // which plan user is currently viewing
+
+// Parse date range from PDF text: "vom 10.03.2026 bis 16.03.2026"
+function extractPlanDateRange(text) {
+  const m = text.match(/(\d{2})\.(\d{2})\.(\d{4})\s*bis\s*(\d{2})\.(\d{2})\.(\d{4})/);
+  if (!m) return null;
+  return {
+    start: new Date(`${m[3]}-${m[2]}-${m[1]}`),
+    end:   new Date(`${m[6]}-${m[5]}-${m[4]}`),
+    startStr: `${m[1]}.${m[2]}.${m[3]}`,
+    endStr:   `${m[4]}.${m[5]}.${m[6]}`
+  };
+}
+
+// Determine plan status relative to today
+function getPlanStatus(plan) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  if (!plan.start_date) return 'unknown';
+  const start = new Date(plan.start_date);
+  const end   = new Date(plan.end_date || plan.start_date);
+  end.setDate(end.getDate() + 1); // inclusive
+  if (today > end)   return 'expired';
+  if (today < start) return 'future';
+  return 'active';
+}
+
+// Load all plans from API and filter to next 2 relevant ones
+async function loadPlansFromAPI() {
+  try {
+    if (API_URL === 'DEINE_API_URL') throw new Error('not_configured');
+    const resp = await fetch(`${API_URL}/plans?all=1&t=${Date.now()}`);
+    if (!resp.ok) throw new Error('no_plans');
+    const all = await resp.json();
+
+    // Sort by start_date ascending
+    all.sort((a, b) => new Date(a.start_date||0) - new Date(b.start_date||0));
+
+    // Filter: keep pinned + non-expired, max 2 future/current
+    const today = new Date(); today.setHours(0,0,0,0);
+    const relevant = all.filter(p => {
+      if (p.pinned) return true;
+      const end = new Date(p.end_date || p.start_date || 0);
+      end.setDate(end.getDate() + 1);
+      return end >= today;
+    }).slice(0, 2); // max 2
+
+    loadedPlans = relevant;
+    return relevant;
+  } catch(e) {
+    return [];
+  }
+}
+
+// Render plan switcher buttons for regular users
+function renderPlanSwitcher(plans) {
+  const switcher = document.getElementById('planSwitcher');
+  if (plans.length < 2) { switcher.style.display = 'none'; return; }
+  switcher.style.display = 'flex';
+  switcher.innerHTML = plans.map((p, i) => {
+    const status = getPlanStatus(p);
+    const label = p.start_date
+      ? `KW ${getKW(new Date(p.start_date))}<br><span style="font-size:0.65rem">${p.startStr||''} – ${p.endStr||''}</span>`
+      : p.original_name.slice(0,20);
+    const dot = status === 'active' ? '🟢' : status === 'future' ? '🔵' : '⚪';
+    return `<button class="plan-switch-btn ${i===0?'active':''}"
+              onclick="switchToPlan(${i}, this)">
+              ${dot} ${label}
+            </button>`;
+  }).join('');
+}
+
+async function switchToPlan(idx, btn) {
+  document.querySelectorAll('.plan-switch-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activePlanIndex = idx;
+  const plan = loadedPlans[idx];
+  if (!plan) return;
+
+  document.getElementById('shiftsContainer').innerHTML =
+    `<div class="empty-state"><div class="big">📄</div>Lade Plan…</div>`;
+
+  const resp = await fetch(`${API_URL}/download/${plan.id}?t=${Date.now()}`);
+  const blob = await resp.blob();
+  await processPdfFile(blob, plan.original_name);
+}
+
+// Admin: render plan list with status + controls
+async function renderAdminPlanList() {
+  const listEl = document.getElementById('adminPlanList');
+  listEl.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">Lade…</div>';
+
+  try {
+    if (API_URL === 'DEINE_API_URL') throw new Error('not_configured');
+    const resp = await fetch(`${API_URL}/plans?t=${Date.now()}`);
+    if (!resp.ok) throw new Error('Keine Pläne gefunden');
+    const plans = await resp.json();
+    plans.sort((a,b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
+
+    if (!plans.length) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;padding:0.5rem">Noch keine Pläne hochgeladen.</div>';
+      return;
+    }
+
+    listEl.innerHTML = plans.map(p => {
+      const status = getPlanStatus(p);
+      const kwLabel = p.start_date ? `KW ${getKW(new Date(p.start_date))}` : 'Unbekannt';
+      const dateLabel = (p.startStr && p.endStr) ? `${p.startStr} – ${p.endStr}` : 'Datum unbekannt';
+      const statusClass = status === 'active' ? 'kw-active' : status === 'future' ? 'kw-future' : 'kw-expired';
+      const itemClass = status === 'expired' ? 'expired-plan' : status === 'future' ? 'future-plan' : 'active-plan';
+      return `
+        <div class="plan-item ${itemClass}" id="planitem-${p.id}">
+          <div class="plan-kw ${statusClass}">${kwLabel}</div>
+          <div class="plan-info">
+            <div class="plan-filename">${p.original_name}</div>
+            <div class="plan-dates">${dateLabel} · ${status === 'active' ? '✅ Aktiv' : status === 'future' ? '⏳ Zukunft' : '🔒 Abgelaufen'}</div>
+          </div>
+          <div class="plan-actions">
+            <button class="plan-btn ${p.pinned ? 'pinned' : ''}"
+                    onclick="togglePinPlan('${p.id}', this)"
+                    title="${p.pinned ? 'Pinning aufheben' : 'Plan anpinnen (immer sichtbar)'}">
+              ${p.pinned ? '📌 Gepinnt' : '📌 Pinnen'}
+            </button>
+            <button class="plan-btn danger" onclick="deletePlan('${p.id}', '${p.original_name}')">🗑</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    listEl.innerHTML = `<div style="color:var(--warn);font-size:0.8rem;padding:0.5rem">
+      ${e.message === 'not_configured' ? '⚙️ API_URL nicht eingetragen.' : e.message}
+    </div>`;
+  }
+}
+
+async function togglePinPlan(id, btn) {
+  const isPinned = btn.classList.contains('pinned');
+  try {
+    await fetch(`${API_URL}/plans/${id}/pin`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ pinned: !isPinned })
+    });
+    showPlanMsg(isPinned ? 'Pinning aufgehoben.' : 'Plan angepinnt – immer sichtbar.', 'ok');
+    renderAdminPlanList();
+  } catch(e) { showPlanMsg('Fehler: ' + e.message, 'err'); }
+}
+
+async function deletePlan(id, name) {
+  if (!confirm(`"${name}" wirklich löschen?`)) return;
+  try {
+    await fetch(`${API_URL}/plans/${id}`, { method: 'DELETE' });
+    showPlanMsg(`"${name}" gelöscht.`, 'ok');
+    renderAdminPlanList();
+  } catch(e) { showPlanMsg('Fehler: ' + e.message, 'err'); }
+}
+
+function showPlanMsg(text, type) {
+  const el = document.getElementById('planMsg');
+  el.textContent = text;
+  el.className = 'admin-msg ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// Helper: get calendar week number
+function getKW(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+// =============================================
+// USER MANAGEMENT
+// =============================================
+
+// Runtime user store – starts from USERS, persisted in localStorage
+let runtimeUsers = null;
+
+function getRuntimeUsers() {
+  if (runtimeUsers) return runtimeUsers;
+  try {
+    const saved = localStorage.getItem('meindienstplan_users');
+    if (saved) {
+      runtimeUsers = JSON.parse(saved);
+      // Merge with base USERS so built-in users are always there
+      for (const [k, v] of Object.entries(USERS)) {
+        if (!runtimeUsers[k]) runtimeUsers[k] = v;
+      }
+    } else {
+      runtimeUsers = { ...USERS };
+    }
+  } catch(e) {
+    runtimeUsers = { ...USERS };
+  }
+  return runtimeUsers;
+}
+
+function saveRuntimeUsers() {
+  try {
+    localStorage.setItem('meindienstplan_users', JSON.stringify(runtimeUsers));
+  } catch(e) { /* storage not available */ }
+}
+
+// Override login to use runtimeUsers
+function doLogin() {
+  const raw = document.getElementById('loginUser').value.trim();
+  const p   = document.getElementById('loginPass').value.trim();
+  const key = raw.toUpperCase();
+  const err = document.getElementById('loginError');
+  const users = getRuntimeUsers();
+
+  let found = null;
+  if (users[key] && users[key].pass === p) {
+    found = key;
+  } else {
+    for (const [k, u] of Object.entries(users)) {
+      if (u.aliases && u.aliases.some(a => a === raw.toLowerCase()) && u.pass === p) {
+        found = k; break;
+      }
+    }
+  }
+
+  if (found) {
+    err.style.display = 'none';
+    currentUser = found;
+    // Update global USERS reference so parser works
+    Object.assign(USERS, users);
+    enterApp();
+  } else {
+    err.style.display = 'block';
+    document.getElementById('loginPass').value = '';
+  }
+}
+
+function switchAdminTab(tab, el) {
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.admin-tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('adminTab-' + tab).classList.add('active');
+  if (tab === 'users')  renderUserList();
+  if (tab === 'plans')  renderAdminPlanList();
+}
+
+function renderUserList() {
+  const users = getRuntimeUsers();
+  const list = document.getElementById('userList');
+
+  const rows = Object.entries(users)
+    .sort(([,a],[,b]) => a.name.localeCompare(b.name))
+    .map(([key, u]) => {
+      const isAdmin = u.isAdmin;
+      const isBuiltIn = !!USERS[key];
+      return `
+        <div class="user-row" id="userrow-${key}">
+          <div class="user-kuerzel ${isAdmin ? 'is-admin' : ''}">${key}</div>
+          <div style="flex:1;min-width:0">
+            <div class="user-name">${u.name}${isAdmin ? ' 👑' : ''}</div>
+            ${u.aliases && u.aliases.length > 1
+              ? `<div class="user-aliases">auch: ${u.aliases.slice(1).join(', ')}</div>`
+              : ''}
+          </div>
+          <button class="user-delete"
+                  onclick="deleteUser('${key}')"
+                  ${isAdmin ? 'disabled title="Admin kann nicht gelöscht werden"' : ''}>
+            🗑
+          </button>
+        </div>`;
+    }).join('');
+
+  list.innerHTML = rows || '<div style="padding:1rem;color:var(--muted);font-size:0.82rem">Keine Nutzer gefunden.</div>';
+}
+
+function addUser() {
+  const name    = document.getElementById('newUserName').value.trim();
+  const kuerzel = document.getElementById('newUserKuerzel').value.trim().toUpperCase();
+  const pass    = document.getElementById('newUserPass').value.trim();
+  const alias   = document.getElementById('newUserAlias').value.trim();
+  const msg     = document.getElementById('userMsg');
+
+  // Validation
+  if (!name || !kuerzel || !pass) {
+    showUserMsg('Bitte Name, Kürzel und Passwort ausfüllen.', 'err');
+    return;
+  }
+  if (!/^[A-Z0-9]{2,10}$/.test(kuerzel)) {
+    showUserMsg('Kürzel: nur Großbuchstaben, 2–10 Zeichen.', 'err');
+    return;
+  }
+
+  const users = getRuntimeUsers();
+  if (users[kuerzel]) {
+    showUserMsg(`Kürzel "${kuerzel}" ist bereits vergeben.`, 'err');
+    return;
+  }
+
+  // Build aliases: name in lowercase + any extra aliases
+  const aliases = [name.toLowerCase()];
+  if (alias) {
+    alias.split(',').map(a => a.trim().toLowerCase()).filter(Boolean).forEach(a => {
+      if (!aliases.includes(a)) aliases.push(a);
+    });
+  }
+
+  users[kuerzel] = { pass, name, aliases };
+  runtimeUsers = users;
+  saveRuntimeUsers();
+  Object.assign(USERS, users); // sync to global
+
+  // Clear form
+  ['newUserName','newUserKuerzel','newUserPass','newUserAlias'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+
+  showUserMsg(`✓ ${name} (${kuerzel}) wurde hinzugefügt.`, 'ok');
+  renderUserList();
+}
+
+function deleteUser(key) {
+  const users = getRuntimeUsers();
+  const u = users[key];
+  if (!u) return;
+  if (u.isAdmin) return;
+  if (!confirm(`${u.name} (${key}) wirklich löschen?`)) return;
+
+  delete users[key];
+  delete USERS[key]; // sync global
+  runtimeUsers = users;
+  saveRuntimeUsers();
+  showUserMsg(`${u.name} wurde entfernt.`, 'ok');
+  renderUserList();
+}
+
+function showUserMsg(text, type) {
+  const el = document.getElementById('userMsg');
+  el.textContent = text;
+  el.className = 'admin-msg ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+// Drag & drop
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('fileInput').files = dt.files;
+    handleFile(document.getElementById('fileInput'));
+  }
+});
+</script>
+</body>
+</html>
