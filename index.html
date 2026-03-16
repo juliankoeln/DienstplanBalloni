@@ -1039,6 +1039,130 @@ let currentUser = null;
 let rawPdfText = '';
 
 // =============================================
+// PDF UPLOAD + PROCESSING
+// =============================================
+
+async function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  await processPdfFile(file, file.name);
+}
+
+async function processPdfFile(fileOrBlob, displayName) {
+  setUploadZoneLoading(displayName);
+  showProcessing('Lese PDF aus…');
+
+  try {
+    const arrayBuffer = await fileOrBlob.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    setProcessing('Extrahiere Text…');
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page        = await pdf.getPage(i);
+      const pageContent = await page.getTextContent();
+      const lines       = groupIntoLines(pageContent.items);
+      fullText += lines + '\n';
+    }
+
+    rawPdfText = fullText;
+    document.getElementById('debugBox').textContent = fullText;
+    document.getElementById('debugToggle').style.display = 'block';
+
+    setProcessing('Suche deine Schichten…');
+    await new Promise(r => setTimeout(r, 300));
+
+    const user = getRuntimeUsers()[currentUser] || USERS[currentUser];
+
+    if (user && user.isAdmin) {
+      const allShiftsResult = parseAllShifts(fullText);
+      allPlanShifts = allShiftsResult;
+      hideProcessing();
+      setUploadZoneDone(displayName);
+      document.getElementById('weekBadge').textContent = displayName;
+      renderAdminSummary(allShiftsResult, fullText);
+      document.getElementById('searchBar').style.display = 'block';
+    } else {
+      const result = parseShiftsForUser(fullText, user || USERS[currentUser]);
+      hideProcessing();
+      setUploadZoneDone(displayName);
+      if (result.shifts.length === 0) {
+        showNoMatch(result.weekInfo);
+      } else {
+        parsedPlanData = result;
+        allPlanShifts  = parseAllShifts(rawPdfText);
+        showSuccess(displayName, result.shifts.length, result.weekInfo);
+        renderShifts(result.shifts, result.weekInfo);
+        document.getElementById('searchBar').style.display = 'block';
+        const previewWeeks = parsePreview(rawPdfText);
+        if (previewWeeks.length) renderPreview(previewWeeks);
+      }
+    }
+
+  } catch (err) {
+    hideProcessing();
+    resetUploadZone();
+    console.error(err);
+    showNoMatch('Fehler beim Lesen der PDF: ' + err.message);
+  }
+}
+
+function renderAdminSummary(allShifts, fullText) {
+  const days = [...new Set(allShifts.map(s => s.day))];
+  document.getElementById('statShifts').textContent = allShifts.length;
+  document.getElementById('statDays').textContent   = days.length;
+  document.getElementById('statEarly').textContent  = allShifts.filter(s => /^8:/.test(s.time)).length;
+  document.getElementById('shiftsContainer').innerHTML =
+    `<div class="empty-state" style="padding:1.5rem 0">
+      <div style="font-size:1.8rem;margin-bottom:0.5rem">&#x2705;</div>
+      Plan geladen &middot; <strong>${allShifts.length}</strong> Eintr&auml;ge f&uuml;r
+      <strong>${days.length}</strong> Tage.
+    </div>`;
+  const previewWeeks = parsePreview(fullText);
+  if (previewWeeks.length) renderPreview(previewWeeks);
+}
+
+function groupIntoLines(items) {
+  if (!items.length) return '';
+  const valid = items.filter(i => i.str && i.str.trim());
+  if (!valid.length) return '';
+
+  valid.sort((a, b) => {
+    const dy = b.transform[5] - a.transform[5];
+    return Math.abs(dy) > 8 ? dy : a.transform[4] - b.transform[4];
+  });
+
+  const map = {};
+  for (const item of valid) {
+    const y = Math.round(item.transform[5] / 8) * 8;
+    (map[y] = map[y] || []).push(item.str);
+  }
+
+  const lines = Object.keys(map)
+    .sort((a, b) => b - a)
+    .map(y => {
+      const toks = map[y];
+      return toks.filter((t, i) =>
+        i === 0 || t.trim().toLowerCase() !== toks[i-1].trim().toLowerCase()
+      ).join(' ').trim();
+    })
+    .filter(Boolean);
+
+  const out = [];
+  for (const line of lines) {
+    if (!out.length) { out.push(line); continue; }
+    const prev = out[out.length - 1];
+    const a = line.toLowerCase().replace(/\s+/g, ' ');
+    const b = prev.toLowerCase().replace(/\s+/g, ' ');
+    if (a === b) continue;
+    if (b.includes(a) && a.length > 3) continue;
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+// =============================================
 // LOGIN
 // =============================================
 function doLogin() {
